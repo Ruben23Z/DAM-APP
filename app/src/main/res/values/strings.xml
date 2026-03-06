@@ -3,4 +3,14 @@
     <string name="hello_world">Hello Android World!</string>
     <string name="my_first_app">My First App</string>
     <string name="image_description">Just a beautiful view</string>
+    <string name="activity_oncreate_msg">Activity %1$s onCreate</string>
+    <string name="oncreate">" onCreate"</string>
+    <string name="show_location">Ver Localização</string>
+    <string name="memories_title">Memórias do ISEL♡</string>
+    <string name="filter_original">Original</string>
+    <string name="filter_bw">B&amp;W</string>
+    <string name="filter_sepia">Sepia</string>
+    <string name="filter_invert">Invert</string>
+    <string name="canvas_hint">Clica no + para adicionar memórias</string>
+    <string name="add_element">Nova Memória</string>
 </resources>

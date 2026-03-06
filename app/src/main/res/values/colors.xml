@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="red">#FF0000</color>
-
-    <color name="purple">#802DDF</color>
-    <color name="yellow">#FFD400</color>
+    <color name="black">#1A1C1E</color>
+    <color name="purple">#7E00FF</color>
+    <color name="yellow">#FFFF00</color>
+    <color name="white">#FBFCFF</color>
+    <color name="primary">#6750A4</color>
+    <color name="secondary">#625B71</color>
+    <color name="tertiary">#7D5260</color>
+    <color name="surface_variant">#E7E0EC</color>
+    <color name="accent_sepia">#704214</color>
+    <color name="accent_blue">#004A77</color>
 
 
 </resources>
