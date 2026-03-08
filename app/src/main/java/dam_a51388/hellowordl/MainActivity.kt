@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -28,7 +29,9 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.materialswitch.MaterialSwitch
+import java.io.Serializable
 import java.util.Random
+import kotlin.math.atan2
 
 class MainActivity : AppCompatActivity() {
 
@@ -38,6 +41,9 @@ class MainActivity : AppCompatActivity() {
 
     private val pickMedia = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
+            try {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {}
             showCaptionDialog(uri)
         }
     }
@@ -74,16 +80,39 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btnFilterInvert).setOnClickListener { applyFilter(getInvertFilter()) }
 
         btnFabMap.setOnClickListener { showMap() }
-
         btnAddMemory.setOnClickListener {
             pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
+
+        // Restaurar fotos após recriação (ex: mudança de tema)
+        if (savedInstanceState != null) {
+            val restoredList = savedInstanceState.getSerializable("photo_list") as? ArrayList<PhotoState>
+            restoredList?.forEach { state ->
+                addPhotoToCanvas(Uri.parse(state.uriString), state.caption, state)
+            }
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val currentStates = ArrayList<PhotoState>()
+        for (i in 0 until canvasLayout.childCount) {
+            val child = canvasLayout.getChildAt(i)
+            if (child is MaterialCardView && child.tag is PhotoState) {
+                val state = child.tag as PhotoState
+                state.x = child.x
+                state.y = child.y
+                state.rotation = child.rotation
+                state.scaleX = child.scaleX
+                state.scaleY = child.scaleY
+                currentStates.add(state)
+            }
+        }
+        outState.putSerializable("photo_list", currentStates)
     }
 
     private fun showCaptionDialog(uri: Uri) {
-        val editText = EditText(this).apply {
-            hint = "Adiciona uma legenda..."
-        }
+        val editText = EditText(this).apply { hint = "Adiciona uma legenda..." }
         AlertDialog.Builder(this)
             .setTitle("Nova Memória")
             .setMessage("Escreve uma legenda para a tua foto.")
@@ -96,91 +125,87 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun addPhotoToCanvas(uri: Uri, caption: String) {
+    private fun addPhotoToCanvas(uri: Uri, caption: String, restoredState: PhotoState? = null) {
+        val state = restoredState ?: PhotoState(
+            uriString = uri.toString(),
+            caption = caption,
+            x = (random.nextInt(300)).toFloat(),
+            y = (800 + random.nextInt(300)).toFloat(),
+            rotation = (random.nextInt(20) - 10).toFloat()
+        )
+
         val card = MaterialCardView(this).apply {
-            radius = 16f
-            elevation = 12f
+            radius = 4f
+            elevation = 15f
+            strokeWidth = 2
+            strokeColor = Color.LTGRAY
             setCardBackgroundColor(android.content.res.ColorStateList.valueOf(Color.WHITE))
-            layoutParams = ConstraintLayout.LayoutParams(400, ViewGroup.LayoutParams.WRAP_CONTENT)
+            layoutParams = ConstraintLayout.LayoutParams(450, ViewGroup.LayoutParams.WRAP_CONTENT)
+            tag = state
         }
 
         val container = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(12, 12, 12, 24)
+            setPadding(20, 20, 20, 50)
         }
 
         val imageView = ImageView(this).apply {
             setImageURI(uri)
             scaleType = ImageView.ScaleType.CENTER_CROP
-            layoutParams = android.widget.LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 350
-            )
+            layoutParams = android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 400)
         }
 
         val textView = TextView(this).apply {
             text = caption
             textAlignment = View.TEXT_ALIGNMENT_CENTER
-            setTextColor(Color.BLACK)
-            textSize = 14f
-            setPadding(0, 12, 0, 0)
+            setTextColor(Color.DKGRAY)
+            textSize = 16f
+            setPadding(0, 24, 0, 0)
             visibility = if (caption.isEmpty()) View.GONE else View.VISIBLE
+            alpha = 0.9f
         }
 
         container.addView(imageView)
         container.addView(textView)
-
-        // Adicionar botões para Aumentar e Rodar
-        val buttonPanel = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER
-            setPadding(0, 8, 0, 0)
-        }
-
-        val btnScale = MaterialButton(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
-            text = "+"
-            textSize = 14f
-            setPadding(0, 0, 0, 0)
-            setOnClickListener {
-                card.scaleX += 0.1f
-                card.scaleY += 0.1f
-            }
-        }
-
-        val btnRotate = MaterialButton(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
-            text = "↻"
-            textSize = 14f
-            setPadding(0, 0, 0, 0)
-            setOnClickListener {
-                card.rotation += 15f
-            }
-        }
-
-        buttonPanel.addView(btnScale, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        buttonPanel.addView(btnRotate, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        container.addView(buttonPanel)
-
         card.addView(container)
 
-        val params = ConstraintLayout.LayoutParams(400, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            startToStart = ConstraintLayout.LayoutParams.PARENT_ID
-            topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-            setMargins(random.nextInt(300), 800 + random.nextInt(300), 0, 0)
+        canvasLayout.addView(card)
+        
+        card.post {
+            card.x = state.x
+            card.y = state.y
+            card.rotation = state.rotation
+            card.scaleX = state.scaleX
+            card.scaleY = state.scaleY
         }
 
-        card.layoutParams = params
-        card.rotation = (random.nextInt(30) - 15).toFloat()
-
-        // --- Lógica de Arrastar e ELIMINAR ---
         setupTouchListener(card)
-
-        canvasLayout.addView(card)
         findViewById<View>(R.id.hintText)?.visibility = View.GONE
     }
+
+    data class PhotoState(
+        val uriString: String,
+        val caption: String,
+        var x: Float = 0f,
+        var y: Float = 0f,
+        var rotation: Float = 0f,
+        var scaleX: Float = 1f,
+        var scaleY: Float = 1f
+    ) : Serializable
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupTouchListener(view: View) {
         var dX = 0f
         var dY = 0f
+        var lastRotation = 0f
+
+        val scaleDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                view.scaleX *= detector.scaleFactor
+                view.scaleY *= detector.scaleFactor
+                return true
+            }
+        })
 
         val gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onLongPress(e: MotionEvent) {
@@ -190,24 +215,35 @@ class MainActivity : AppCompatActivity() {
 
         view.setOnTouchListener { v, event ->
             gestureDetector.onTouchEvent(event)
-            
+            scaleDetector.onTouchEvent(event)
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     dX = v.x - event.rawX
                     dY = v.y - event.rawY
-                    v.animate().scaleX(v.scaleX * 1.05f).scaleY(v.scaleY * 1.05f).setDuration(100).start()
                     v.bringToFront()
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    v.x = event.rawX + dX
-                    v.y = event.rawY + dY
+                MotionEvent.ACTION_POINTER_DOWN -> {
+                    if (event.pointerCount == 2) lastRotation = calculateRotation(event)
                 }
-                MotionEvent.ACTION_UP -> {
-                    v.animate().scaleX(v.scaleX / 1.05f).scaleY(v.scaleY / 1.05f).setDuration(100).start()
+                MotionEvent.ACTION_MOVE -> {
+                    if (event.pointerCount == 1 && !scaleDetector.isInProgress) {
+                        v.x = event.rawX + dX
+                        v.y = event.rawY + dY
+                    } else if (event.pointerCount == 2) {
+                        val currentRotation = calculateRotation(event)
+                        v.rotation += currentRotation - lastRotation
+                        lastRotation = currentRotation
+                    }
                 }
             }
             true
         }
+    }
+
+    private fun calculateRotation(event: MotionEvent): Float {
+        val deltaX = (event.getX(0) - event.getX(1)).toDouble()
+        val deltaY = (event.getY(0) - event.getY(1)).toDouble()
+        return Math.toDegrees(atan2(deltaY, deltaX)).toFloat()
     }
 
     private fun showDeleteDialog(view: View) {
@@ -216,48 +252,30 @@ class MainActivity : AppCompatActivity() {
             .setMessage("Tens a certeza que queres remover esta foto do teu mural?")
             .setPositiveButton("Sim, eliminar") { _, _ ->
                 canvasLayout.removeView(view)
-                // Se não houver mais fotos, mostrar o texto de ajuda novamente
-                if (canvasLayout.childCount <= 4) { // Assumindo que os outros elementos são estáticos
-                     findViewById<View>(R.id.hintText)?.visibility = View.VISIBLE
-                }
+                if (canvasLayout.childCount <= 4) findViewById<View>(R.id.hintText)?.visibility = View.VISIBLE
             }
             .setNegativeButton("Não", null)
             .show()
     }
 
-    private fun applyFilter(filter: ColorMatrixColorFilter?) {
-        mainImageView.colorFilter = filter
-    }
-
+    private fun applyFilter(filter: ColorMatrixColorFilter?) { mainImageView.colorFilter = filter }
     private fun getGreyFilter() = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
-
     private fun getSepiaFilter(): ColorMatrixColorFilter {
-        val matrix = ColorMatrix()
-        matrix.setSaturation(0f)
-        val sepiaMatrix = ColorMatrix()
-        sepiaMatrix.setScale(1f, 0.95f, 0.82f, 1.0f)
+        val matrix = ColorMatrix().apply { setSaturation(0f) }
+        val sepiaMatrix = ColorMatrix().apply { setScale(1f, 0.95f, 0.82f, 1.0f) }
         matrix.postConcat(sepiaMatrix)
         return ColorMatrixColorFilter(matrix)
     }
-
-    private fun getInvertFilter(): ColorMatrixColorFilter {
-        val matrix = floatArrayOf(
-            -1.0f, 0f, 0f, 0f, 255f,
-            0f, -1.0f, 0f, 0f, 255f,
-            0f, 0f, -1.0f, 0f, 255f,
-            0f, 0f, 0f, 1.0f, 0f
-        )
-        return ColorMatrixColorFilter(ColorMatrix(matrix))
-    }
+    private fun getInvertFilter() = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+        -1f, 0f, 0f, 0f, 255f, 0f, -1f, 0f, 0f, 255f, 0f, 0f, -1f, 0f, 255f, 0f, 0f, 0f, 1f, 0f
+    )))
 
     private fun showMap() {
-        val gmmIntentUri = Uri.parse("geo:38.7567,-9.1171?q=38.7567,-9.1171(ISEL)")
+        val address = "Instituto Superior de Engenharia de Lisboa, R. Conselheiro Emídio Navarro 1, 1959-007 Lisboa"
+        val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(address)}")
         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
         mapIntent.setPackage("com.google.android.apps.maps")
-        if (mapIntent.resolveActivity(packageManager) != null) {
-            startActivity(mapIntent)
-        } else {
-            startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
-        }
+        if (mapIntent.resolveActivity(packageManager) != null) startActivity(mapIntent)
+        else startActivity(Intent(Intent.ACTION_VIEW, gmmIntentUri))
     }
 }

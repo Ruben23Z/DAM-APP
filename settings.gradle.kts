@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "APPHelloworld"
+rootProject.name = "DAMAPP"
 include(":app")
  
